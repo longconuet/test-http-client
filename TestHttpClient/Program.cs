@@ -3,26 +3,46 @@ using TestHttpClient;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 //builder.Services.Configure<ApplicationOptions>(
 //    builder.Configuration.GetSection(nameof(ApplicationOptions)));
 
-builder.Services.ConfigureOptions<ApplicationOptionsSetup>();
+builder.Services.ConfigureOptions<GithubSettingsSetup>();
+
+builder.Services.AddHttpClient("github", (sp, httpClient) =>
+{
+    var githubSettings = sp.GetRequiredService<IOptions<GithubSettings>>().Value;
+    httpClient.BaseAddress = new Uri("https://jsonplaceholder.typicode.com");
+    httpClient.DefaultRequestHeaders.Add("Accept", githubSettings.Accept);
+});
+
+builder.Services.AddHttpClient<GithubService>((sp, httpClient) =>
+{
+    var githubSettings = sp.GetRequiredService<IOptions<GithubSettings>>().Value;
+    httpClient.BaseAddress = new Uri("https://jsonplaceholder.typicode.com");
+    httpClient.DefaultRequestHeaders.Add("Accept", githubSettings.Accept);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    return new SocketsHttpHandler()
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(15)
+    };
+})
+.SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
 var app = builder.Build();
 
-app.MapGet("/options", (
-    IOptions<ApplicationOptions> options,
-    IOptionsSnapshot<ApplicationOptions> optionsSnapshot,
-    IOptionsMonitor<ApplicationOptions> optionsMonitor) =>
+if (app.Environment.IsDevelopment())
 {
-    var response = new
-    {
-        OptionsValue = options.Value.ExampleValue,
-        OptionsSnapshotValue = optionsSnapshot.Value.ExampleValue,
-        OptionsMonitorValue = optionsMonitor.CurrentValue.ExampleValue
-    };
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
-    return Results.Ok(response);
-});
+app.UseHttpsRedirection();
+
+app.MapUserEndPoints();
 
 app.Run();
