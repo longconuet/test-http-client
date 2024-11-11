@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Refit;
 using TestHttpClient;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,32 +7,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-//builder.Services.Configure<ApplicationOptions>(
-//    builder.Configuration.GetSection(nameof(ApplicationOptions)));
-
 builder.Services.ConfigureOptions<GithubSettingsSetup>();
 
-builder.Services.AddHttpClient("github", (sp, httpClient) =>
-{
-    var githubSettings = sp.GetRequiredService<IOptions<GithubSettings>>().Value;
-    httpClient.BaseAddress = new Uri("https://jsonplaceholder.typicode.com");
-    httpClient.DefaultRequestHeaders.Add("Accept", githubSettings.Accept);
-});
+builder.Services.AddTransient<GithubAuthenticationHandler>();
 
-builder.Services.AddHttpClient<GithubService>((sp, httpClient) =>
-{
-    var githubSettings = sp.GetRequiredService<IOptions<GithubSettings>>().Value;
-    httpClient.BaseAddress = new Uri("https://jsonplaceholder.typicode.com");
-    httpClient.DefaultRequestHeaders.Add("Accept", githubSettings.Accept);
-})
-.ConfigurePrimaryHttpMessageHandler(() =>
-{
-    return new SocketsHttpHandler()
+builder.Services.AddRefitClient<IGithubApi>()
+    .ConfigureHttpClient((sp, httpClient) =>
     {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(15)
-    };
-})
-.SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+        var githubSettings = sp.GetRequiredService<IOptions<GithubSettings>>().Value;
+        httpClient.BaseAddress = new Uri("https://jsonplaceholder.typicode.com");
+    })
+    .AddHttpMessageHandler<GithubAuthenticationHandler>();
 
 var app = builder.Build();
 
